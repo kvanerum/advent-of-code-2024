@@ -1,49 +1,143 @@
-use std::collections::HashSet;
+use crate::Direction::{East, North, South, West};
+use std::collections::{BTreeSet, HashMap, HashSet};
+
+#[derive(Eq, PartialEq, Hash, Clone, Debug)]
+enum Direction {
+    North,
+    South,
+    East,
+    West,
+}
 
 fn main() {
     let input = read_input();
 
     let regions = split_into_regions(&input);
 
-    // regions.iter().for_each(|(label, positions)| {
-    //     println!(
-    //         "{}: area={} perimeter={}",
-    //         label,
-    //         positions.len(),
-    //         calculate_perimeter(positions, input[0].len(), input.len())
-    //     )
-    // });
-
-    let result: usize = regions
+    let mut result: usize = regions
         .iter()
         .map(|(_, positions)| {
-            positions.len() * calculate_perimeter(positions, input[0].len(), input.len())
+            positions.len() * calculate_edges(positions, input[0].len(), input.len()).len()
+        })
+        .sum();
+
+    println!("{}", result);
+
+    result = regions
+        .iter()
+        .map(|(_, positions)| {
+            positions.len() * count_sides(&calculate_edges(positions, input[0].len(), input.len()))
         })
         .sum();
 
     println!("{}", result);
 }
 
-fn calculate_perimeter(positions: &HashSet<(usize, usize)>, width: usize, height: usize) -> usize {
-    let mut result = 0;
+fn calculate_edges(
+    positions: &HashSet<(usize, usize)>,
+    width: usize,
+    height: usize,
+) -> HashSet<(usize, usize, Direction)> {
+    let mut result = HashSet::new();
 
     positions.iter().for_each(|position| {
         // up
         if position.0 as i32 - 1 < 0 || !positions.contains(&(position.0 - 1, position.1)) {
-            result += 1;
+            result.insert((position.0, position.1, Direction::North));
         }
         // down
         if position.0 + 1 >= height || !positions.contains(&(position.0 + 1, position.1)) {
-            result += 1;
+            result.insert((position.0, position.1, Direction::South));
         }
         // left
         if position.1 as i32 - 1 < 0 || !positions.contains(&(position.0, position.1 - 1)) {
-            result += 1;
+            result.insert((position.0, position.1, Direction::West));
         }
         // right
         if position.1 + 1 >= width || !positions.contains(&(position.0, position.1 + 1)) {
-            result += 1;
+            result.insert((position.0, position.1, Direction::East));
         }
+    });
+
+    result
+}
+fn count_sides(edges: &HashSet<(usize, usize, Direction)>) -> usize {
+    count_horizontal_sides(
+        &edges
+            .iter()
+            .filter(|(_, _, direction)| *direction == North)
+            .map(|(row, col, _)| (row, col))
+            .collect(),
+    ) + count_horizontal_sides(
+        &edges
+            .iter()
+            .filter(|(_, _, direction)| *direction == South)
+            .map(|(row, col, _)| (row, col))
+            .collect(),
+    ) + count_vertical_sides(
+        &edges
+            .iter()
+            .filter(|(_, _, direction)| *direction == East)
+            .map(|(row, col, _)| (row, col))
+            .collect(),
+    ) + count_vertical_sides(
+        &edges
+            .iter()
+            .filter(|(_, _, direction)| *direction == West)
+            .map(|(row, col, _)| (row, col))
+            .collect(),
+    )
+}
+
+fn count_horizontal_sides(edges: &HashSet<(&usize, &usize)>) -> usize {
+    // group by row
+    let mut grouped: HashMap<usize, BTreeSet<usize>> = HashMap::new();
+
+    edges.iter().for_each(|&(row, col)| {
+        grouped
+            .entry(*row)
+            .or_insert_with(BTreeSet::new)
+            .insert(*col);
+    });
+
+    let mut result = 0;
+
+    grouped.values().for_each(|columns| {
+        let mut previous = *columns.first().expect("first column");
+        columns.iter().for_each(|&column| {
+            if column != previous + 1 {
+                result += 1;
+            }
+
+            previous = column;
+        });
+    });
+
+    result
+}
+
+fn count_vertical_sides(edges: &HashSet<(&usize, &usize)>) -> usize {
+    // group by column
+    let mut grouped: HashMap<usize, BTreeSet<usize>> = HashMap::new();
+
+    edges.iter().for_each(|&(row, col)| {
+        grouped
+            .entry(*col)
+            .or_insert_with(BTreeSet::new)
+            .insert(*row);
+    });
+
+    let mut result = 0;
+
+    grouped.values().for_each(|rows| {
+        let mut previous = *rows.first().expect("first row");
+        rows.iter().for_each(|&column| {
+            if column != previous + 1 {
+                result += 1;
+            }
+
+            previous = column;
+        });
     });
 
     result
