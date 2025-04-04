@@ -1,3 +1,5 @@
+use itertools::Itertools;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::HashMap;
 
 fn main() {
@@ -13,6 +15,95 @@ fn main() {
             .collect::<Vec<String>>()
             .join(",")
     );
+
+    let mut min_register = usize::MAX;
+    fix_prefix(
+        0,
+        &instructions,
+        8_usize.pow(15),
+        1,
+        &register,
+        &mut min_register,
+    );
+
+    println!("{min_register}");
+}
+
+fn fix_prefix(
+    position: usize,
+    output: &Vec<u8>,
+    register_a_start: usize,
+    delta: usize,
+    register: &HashMap<char, usize>,
+    min_register: &mut usize,
+) {
+    if register_a_start >= *min_register {
+        return;
+    }
+
+    if position == output.len() {
+        *min_register = register_a_start;
+        return;
+    }
+
+    // generate sample outputs
+    let sample_outputs: HashMap<usize, Vec<u8>> = (0..2000)
+        .into_par_iter()
+        .map(|i| register_a_start + delta * i)
+        .map(|register_a| {
+            (
+                register_a,
+                run_program_with_register_a(register, output, register_a),
+            )
+        })
+        .collect();
+
+    // find a pattern
+    let pattern = find_pattern(sample_outputs, position);
+
+    let indices = pattern
+        .iter()
+        .enumerate()
+        .filter(|(_, &x)| x == output[position])
+        .map(|(i, _)| i)
+        .collect::<Vec<usize>>();
+
+    for index in indices {
+        fix_prefix(
+            position + 1,
+            output,
+            register_a_start + index * delta,
+            delta * pattern.len(),
+            register,
+            min_register,
+        );
+    }
+}
+
+fn find_pattern(outputs: HashMap<usize, Vec<u8>>, position: usize) -> Vec<u8> {
+    let outputs_at_position = outputs
+        .iter()
+        .sorted_by_key(|(register, _)| **register)
+        .map(|(_, output)| output[position])
+        .collect_vec();
+
+    for length in 1..outputs_at_position.len() {
+        if check_pattern(length, &outputs_at_position) {
+            return outputs_at_position[0..length].to_vec();
+        }
+    }
+
+    panic!("no pattern found");
+}
+
+fn check_pattern(length: usize, output: &Vec<u8>) -> bool {
+    for i in 0..output.len() {
+        if output[i] != output[i % length] {
+            return false;
+        }
+    }
+
+    true
 }
 
 fn run_program_with_register_a(
